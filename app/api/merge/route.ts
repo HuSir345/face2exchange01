@@ -104,7 +104,18 @@ export async function POST(request: NextRequest) {
     for (const envVar of requiredEnvVars) {
       if (!process.env[envVar]) {
         console.error(`缺少必要的环境变量: ${envVar}`)
-        throw new Error(`服务器配置错误: 缺少 ${envVar}`)
+        return NextResponse.json(
+          { 
+            error: `服务器配置错误: 缺少环境变量 ${envVar}`,
+            errorType: 'ConfigError'
+          },
+          { 
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        )
       }
     }
 
@@ -114,8 +125,48 @@ export async function POST(request: NextRequest) {
 
     if (!image1 || !image2) {
       return NextResponse.json(
-        { error: '请提供两张图片' },
-        { status: 400 }
+        { 
+          error: '请提供两张图片',
+          errorType: 'ValidationError'
+        },
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
+
+    // 验证图片大小和类型
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (image1.size > maxSize || image2.size > maxSize) {
+      return NextResponse.json(
+        { 
+          error: '图片大小不能超过5MB',
+          errorType: 'ValidationError'
+        },
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
+
+    if (!image1.type.startsWith('image/') || !image2.type.startsWith('image/')) {
+      return NextResponse.json(
+        { 
+          error: '请上传有效的图片文件',
+          errorType: 'ValidationError'
+        },
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
     }
 
@@ -217,15 +268,27 @@ export async function POST(request: NextRequest) {
 
     } catch (uploadError) {
       console.error('图片处理过程错误:', uploadError)
-      throw new Error(uploadError instanceof Error ? uploadError.message : '图片处理失败')
+      return NextResponse.json(
+        { 
+          error: uploadError instanceof Error ? uploadError.message : '图片处理失败',
+          errorType: 'ProcessError',
+          details: uploadError instanceof Error ? uploadError.stack : undefined
+        },
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
     }
 
   } catch (error) {
     console.error('API错误:', error)
-    // 确保返回格式化的 JSON 响应
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : '处理失败',
+        errorType: 'ServerError',
         timestamp: new Date().toISOString(),
         details: error instanceof Error ? error.stack : undefined
       },
