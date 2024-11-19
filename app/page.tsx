@@ -57,29 +57,38 @@ export default function Home() {
       setError(null)
       setLogs([])
 
-      // 记录开始处理的详细信息
+      // 记录更详细的开始信息
       addLog('开始处理图片任务', 'info')
-      addLog('系统环境信息', 'debug', JSON.stringify({
+      addLog('浏览器环境信息', 'debug', JSON.stringify({
         userAgent: navigator.userAgent,
         timestamp: new Date().toISOString(),
         screenSize: `${window.innerWidth}x${window.innerHeight}`,
         platform: navigator.platform,
-        language: navigator.language
+        language: navigator.language,
+        cookieEnabled: navigator.cookieEnabled,
+        onLine: navigator.onLine,
+        memory: (performance as any)?.memory ? {
+          jsHeapSizeLimit: ((performance as any).memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + 'MB',
+          totalJSHeapSize: ((performance as any).memory.totalJSHeapSize / 1024 / 1024).toFixed(2) + 'MB',
+          usedJSHeapSize: ((performance as any).memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + 'MB',
+        } : 'Not available'
       }, null, 2))
 
-      // 记录图片信息
-      addLog('图片信息', 'debug', JSON.stringify({
+      // 记录更详细的图片信息
+      addLog('图片详细信息', 'debug', JSON.stringify({
         image1: {
           name: image1.name,
           size: `${(image1.size / 1024).toFixed(2)}KB`,
           type: image1.type,
-          lastModified: new Date(image1.lastModified).toISOString()
+          lastModified: new Date(image1.lastModified).toISOString(),
+          dimensions: await getImageDimensions(image1)
         },
         image2: {
           name: image2.name,
           size: `${(image2.size / 1024).toFixed(2)}KB`,
           type: image2.type,
-          lastModified: new Date(image2.lastModified).toISOString()
+          lastModified: new Date(image2.lastModified).toISOString(),
+          dimensions: await getImageDimensions(image2)
         }
       }, null, 2))
 
@@ -87,52 +96,109 @@ export default function Home() {
       formData.append('image1', image1)
       formData.append('image2', image2)
 
-      addLog('准备发送请求到服务器', 'info')
+      addLog('准备发送请求到服务器', 'info', JSON.stringify({
+        endpoint: '/api/merge',
+        method: 'POST',
+        contentType: 'multipart/form-data',
+        timestamp: new Date().toISOString()
+      }, null, 2))
+
       const startTime = Date.now()
+      let responseStartTime: number
 
       const response = await fetch('/api/merge', {
         method: 'POST',
         body: formData,
       })
 
-      const endTime = Date.now()
-      addLog(`服务器响应完成，耗时: ${endTime - startTime}ms`, 'info')
+      responseStartTime = Date.now()
+      const responseTime = responseStartTime - startTime
 
-      // 记录响应头信息
-      addLog('服务器响应头', 'debug', JSON.stringify(
-        Object.fromEntries(response.headers.entries()),
-        null, 2
-      ))
+      addLog(`收到服务器初始响应，耗时: ${responseTime}ms`, 'info')
 
-      const data = await response.json()
-      addLog('服务器返回数据', 'debug', JSON.stringify(data, null, 2))
+      // 记录详细的响应头信息
+      const responseHeaders = Object.fromEntries(response.headers.entries())
+      addLog('服务器响应详情', 'debug', JSON.stringify({
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+        type: response.type,
+        url: response.url,
+        redirected: response.redirected,
+        ok: response.ok
+      }, null, 2))
 
-      if (!response.ok) {
-        throw new Error(data.error || '处理失败')
+      // 尝试读取响应内容
+      let responseText: string
+      try {
+        responseText = await response.text()
+        addLog('服务器原始响应内容', 'debug', responseText)
+
+        // 尝试解析为 JSON
+        const data = JSON.parse(responseText)
+        addLog('解析后的响应数据', 'debug', JSON.stringify(data, null, 2))
+
+        if (!response.ok) {
+          throw new Error(data.error || `服务器错误 (${response.status})`)
+        }
+
+        addLog('图片处理成功', 'success')
+        if (data.resultUrl) {
+          addLog('生成的图片URL', 'info', data.resultUrl)
+          addLog('处理完成时间', 'info', JSON.stringify({
+            totalTime: `${Date.now() - startTime}ms`,
+            serverProcessing: `${responseTime}ms`,
+            responseProcessing: `${Date.now() - responseStartTime}ms`
+          }, null, 2))
+        }
+
+        setResultImage(data.resultUrl)
+        setStatus('success')
+      } catch (parseError) {
+        addLog('解析响应失败', 'error', JSON.stringify({
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          responseText: responseText,
+          contentType: responseHeaders['content-type'],
+          contentLength: responseHeaders['content-length']
+        }, null, 2))
+        throw new Error('无法解析服务器响应')
       }
-
-      addLog('图片处理成功', 'success')
-      if (data.resultUrl) {
-        addLog('生成的图片URL', 'info', data.resultUrl)
-      }
-
-      setResultImage(data.resultUrl)
-      setStatus('success')
     } catch (error: any) {
       const errorDetails = {
         message: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString(),
         type: error.name,
-        code: error.code
+        code: error.code,
+        // 添加更多错误相关信息
+        cause: error.cause ? {
+          message: error.cause.message,
+          stack: error.cause.stack
+        } : undefined,
+        networkError: error instanceof TypeError && error.message.includes('network'),
+        parseError: error instanceof SyntaxError
       }
       
       addLog('处理失败', 'error', error.message)
-      addLog('错误详情', 'debug', JSON.stringify(errorDetails, null, 2))
+      addLog('错误详细信息', 'debug', JSON.stringify(errorDetails, null, 2))
       
       setError(error.message || '处理失败')
       setStatus('error')
     }
+  }
+
+  // 辅助函数：获取图片尺寸
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        resolve({
+          width: img.width,
+          height: img.height
+        })
+      }
+      img.src = URL.createObjectURL(file)
+    })
   }
 
   return (
