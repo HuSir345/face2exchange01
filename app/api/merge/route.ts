@@ -172,21 +172,10 @@ export async function POST(request: NextRequest) {
       throw new Error('处理返回数据失败')
     }
 
-  } catch (error: any) {
-    console.error('错误详情:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response
-    })
-
+  } catch (error) {
+    console.error('API错误:', error)
     return NextResponse.json(
-      { 
-        error: error.message || '处理失败',
-        details: {
-          message: error.message,
-          response: error.response
-        }
-      },
+      { error: error instanceof Error ? error.message : '处理失败' },
       { status: 500 }
     )
   }
