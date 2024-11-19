@@ -10,4 +10,10 @@ export interface LogEntry {
   type: 'info' | 'error' | 'success' | 'debug'
   message: string
   details?: string
+}
+
+export interface ImageUploaderProps {
+  onProcess: (image1: File, image2: File) => Promise<void>
+  status: ProcessingStatus
+  onImageChange: () => void
 } 

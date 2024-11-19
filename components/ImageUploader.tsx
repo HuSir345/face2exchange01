@@ -3,14 +3,9 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { ImagePreview, ProcessingStatus } from '@/types'
+import { ImageUploaderProps } from '@/types'
 
-interface Props {
-  onProcess: (image1: File, image2: File) => Promise<void>
-  status: ProcessingStatus
-  onError?: (message: string) => void
-}
-
-export default function ImageUploader({ onProcess, status, onError }: Props) {
+export default function ImageUploader({ onProcess, status, onImageChange }: ImageUploaderProps) {
   const [previews, setPreviews] = useState<[ImagePreview?, ImagePreview?]>([])
   const [isProcessing, setIsProcessing] = useState(false)
 
