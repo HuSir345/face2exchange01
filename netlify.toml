@@ -5,9 +5,22 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+[functions]
+  # 设置 Node.js 版本
+  node_bundler = "esbuild"
+  external_node_modules = ["sharp"]
+
+# 处理 API 路由
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/nextjs-server"
+  status = 200
+  force = true
+
+# 处理所有其他路由
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/nextjs-server"
   status = 200
 
 [build.environment]

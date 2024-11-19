@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   images: {
-    domains: ['api.coze.cn', 'www.imagehub.cc', 's.coze.cn', 's1.imagehub.cc'],
-  },
+    domains: ['s1.imagehub.cc', 's.coze.cn'],
+    unoptimized: true
+  }
 }
 
 module.exports = nextConfig 
