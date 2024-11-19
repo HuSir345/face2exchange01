@@ -92,7 +92,7 @@ async function downloadAndUploadImage(url: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
-    // 验证环境变量
+    // 1. 环境变量验证
     const requiredEnvVars = [
       'WORKFLOW_ID',
       'COZE_API_URL',
@@ -101,202 +101,172 @@ export async function POST(request: NextRequest) {
       'IMAGEHUB_API_KEY'
     ]
     
-    for (const envVar of requiredEnvVars) {
-      if (!process.env[envVar]) {
-        console.error(`缺少必要的环境变量: ${envVar}`)
-        return NextResponse.json(
-          { 
-            error: `服务器配置错误: 缺少环境变量 ${envVar}`,
-            errorType: 'ConfigError'
-          },
-          { 
-            status: 500,
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        )
-      }
+    const missingVars = requiredEnvVars.filter(key => !process.env[key])
+    if (missingVars.length > 0) {
+      console.error('缺少环境变量:', missingVars)
+      return new NextResponse(
+        JSON.stringify({
+          error: `配置错误: 缺少环境变量 ${missingVars.join(', ')}`,
+          errorType: 'ConfigError'
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
 
-    const formData = await request.formData()
+    // 2. 请求验证
+    const formData = await request.formData().catch(error => {
+      console.error('解析表单数据失败:', error)
+      return null
+    })
+
+    if (!formData) {
+      return new NextResponse(
+        JSON.stringify({
+          error: '无效的请求数据',
+          errorType: 'ValidationError'
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
     const image1 = formData.get('image1') as File
     const image2 = formData.get('image2') as File
 
     if (!image1 || !image2) {
-      return NextResponse.json(
-        { 
+      return new NextResponse(
+        JSON.stringify({
           error: '请提供两张图片',
           errorType: 'ValidationError'
-        },
-        { 
+        }),
+        {
           status: 400,
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' }
         }
       )
     }
 
-    // 验证图片大小和类型
-    const maxSize = 5 * 1024 * 1024 // 5MB
-    if (image1.size > maxSize || image2.size > maxSize) {
-      return NextResponse.json(
-        { 
-          error: '图片大小不能超过5MB',
-          errorType: 'ValidationError'
-        },
-        { 
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-    }
-
-    if (!image1.type.startsWith('image/') || !image2.type.startsWith('image/')) {
-      return NextResponse.json(
-        { 
-          error: '请上传有效的图片文件',
-          errorType: 'ValidationError'
-        },
-        { 
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-    }
-
-    console.log('开始上传原始图片到图床...')
-    console.log('图片1信息:', {
-      name: image1.name,
-      type: image1.type,
-      size: `${(image1.size / 1024).toFixed(2)}KB`
-    })
-    console.log('图片2信息:', {
-      name: image2.name,
-      type: image2.type,
-      size: `${(image2.size / 1024).toFixed(2)}KB`
-    })
-
+    // 3. 图片处理
     try {
+      console.log('开始上传原始图片...')
       const [image1Url, image2Url] = await Promise.all([
         uploadToImageHub(image1),
         uploadToImageHub(image2)
       ])
 
-      console.log('原始图片上传成功:')
-      console.log('图片1 URL:', image1Url)
-      console.log('图片2 URL:', image2Url)
-
-      console.log('准备调用 Coze API...')
-      const requestBody = {
-        workflow_id: process.env.WORKFLOW_ID!.trim(),
-        parameters: {
-          face_image: image1Url,
-          base_image: image2Url
-        }
-      }
-
-      console.log('Coze API 请求体:', JSON.stringify(requestBody, null, 2))
-
-      const response = await fetch(process.env.COZE_API_URL!, {
+      // 4. 调用 Coze API
+      console.log('调用 Coze API...')
+      const cozeResponse = await fetch(process.env.COZE_API_URL!, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.AUTHORIZATION!.trim()}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Origin': 'https://www.coze.cn',
-          'Referer': 'https://www.coze.cn/'
+          'Accept': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          workflow_id: process.env.WORKFLOW_ID!.trim(),
+          parameters: { face_image: image1Url, base_image: image2Url }
+        })
       })
 
-      console.log('Coze API 响应状态:', response.status)
-      console.log('Coze API 响应头:', Object.fromEntries(response.headers.entries()))
-
-      const responseText = await response.text()
-      console.log('Coze API 原始响应:', responseText)
-
-      let result
-      try {
-        result = JSON.parse(responseText)
-      } catch (e) {
-        console.error('解析 Coze API 响应失败:', e)
-        throw new Error('无法解析 Coze API 响应')
+      if (!cozeResponse.ok) {
+        const errorText = await cozeResponse.text()
+        console.error('Coze API 错误响应:', errorText)
+        return new NextResponse(
+          JSON.stringify({
+            error: 'AI 处理失败',
+            errorType: 'CozeAPIError',
+            details: errorText
+          }),
+          {
+            status: 502,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
       }
 
-      console.log('Coze API 响应数据:', JSON.stringify(result, null, 2))
-
-      if (!response.ok) {
-        throw new Error(`Coze API 错误: ${response.status} - ${JSON.stringify(result)}`)
+      const cozeResult = await cozeResponse.json()
+      
+      if (cozeResult.code !== 0) {
+        return new NextResponse(
+          JSON.stringify({
+            error: cozeResult.msg || 'AI 处理失败',
+            errorType: 'CozeAPIError',
+            details: cozeResult
+          }),
+          {
+            status: 502,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
       }
 
-      if (result.code !== 0) {
-        throw new Error(result.msg || '处理失败')
+      // 5. 处理返回的图片
+      const outputData = typeof cozeResult.data === 'string' 
+        ? JSON.parse(cozeResult.data) 
+        : cozeResult.data
+
+      if (!outputData?.output) {
+        return new NextResponse(
+          JSON.stringify({
+            error: '处理结果无效',
+            errorType: 'ProcessError',
+            details: cozeResult
+          }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
       }
 
-      // 解析返回的数据
-      let outputData
-      try {
-        outputData = typeof result.data === 'string' ? JSON.parse(result.data) : result.data
-        console.log('解析后的输出数据:', outputData)
+      // 6. 上传结果图片到图床
+      const finalImageUrl = await downloadAndUploadImage(outputData.output)
 
-        if (!outputData.output) {
-          throw new Error('输出数据缺少图片URL')
-        }
-
-        console.log('开始上传生成的图片到图床...')
-        const finalImageUrl = await downloadAndUploadImage(outputData.output)
-        console.log('生成的图片上传成功:', finalImageUrl)
-
-        return NextResponse.json({
+      return new NextResponse(
+        JSON.stringify({
           resultUrl: finalImageUrl,
           originalUrl: outputData.output,
-          rawResponse: result
-        })
+          rawResponse: cozeResult
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
 
-      } catch (e) {
-        console.error('处理返回数据失败:', e)
-        console.log('原始返回数据:', result.data)
-        throw new Error('处理返回数据失败')
-      }
-
-    } catch (uploadError) {
-      console.error('图片处理过程错误:', uploadError)
-      return NextResponse.json(
-        { 
-          error: uploadError instanceof Error ? uploadError.message : '图片处理失败',
+    } catch (error) {
+      console.error('处理过程错误:', error)
+      return new NextResponse(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : '处理失败',
           errorType: 'ProcessError',
-          details: uploadError instanceof Error ? uploadError.stack : undefined
-        },
-        { 
+          details: error instanceof Error ? error.stack : undefined
+        }),
+        {
           status: 500,
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' }
         }
       )
     }
 
   } catch (error) {
-    console.error('API错误:', error)
-    return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : '处理失败',
+    // 最外层错误处理
+    console.error('API 致命错误:', error)
+    return new NextResponse(
+      JSON.stringify({
+        error: '服务器内部错误',
         errorType: 'ServerError',
-        timestamp: new Date().toISOString(),
         details: error instanceof Error ? error.stack : undefined
-      },
-      { 
+      }),
+      {
         status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       }
     )
   }

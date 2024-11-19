@@ -105,6 +105,7 @@ export default function Home() {
 
       const startTime = Date.now()
       let responseStartTime: number
+      let responseText = ''
 
       const response = await fetch('/api/merge', {
         method: 'POST',
@@ -129,7 +130,6 @@ export default function Home() {
       }, null, 2))
 
       // 尝试读取响应内容
-      let responseText: string
       try {
         responseText = await response.text()
         addLog('服务器原始响应内容', 'debug', responseText)
@@ -157,7 +157,7 @@ export default function Home() {
       } catch (parseError) {
         addLog('解析响应失败', 'error', JSON.stringify({
           error: parseError instanceof Error ? parseError.message : String(parseError),
-          responseText: responseText,
+          responseText,
           contentType: responseHeaders['content-type'],
           contentLength: responseHeaders['content-length']
         }, null, 2))
