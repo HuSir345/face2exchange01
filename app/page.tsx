@@ -153,7 +153,7 @@ export default function Home() {
         <ImageUploader 
           onProcess={handleProcess} 
           status={status}
-          onChange={handleImageChange}
+          onImageChange={handleImageChange}
         />
         
         {error && (
