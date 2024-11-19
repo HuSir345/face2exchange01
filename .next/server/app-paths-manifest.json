@@ -1,4 +1,4 @@
 {
-  "/api/merge/route": "app/api/merge/route.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/api/merge/route": "app/api/merge/route.js"
 }

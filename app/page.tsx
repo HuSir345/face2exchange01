@@ -154,6 +154,10 @@ export default function Home() {
           onProcess={handleProcess} 
           status={status}
           onImageChange={handleImageChange}
+          onError={(message) => {
+            setError(message)
+            addLog(message, 'error')
+          }}
         />
         
         {error && (

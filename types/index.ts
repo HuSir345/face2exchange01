@@ -16,4 +16,5 @@ export interface ImageUploaderProps {
   onProcess: (image1: File, image2: File) => Promise<void>
   status: ProcessingStatus
   onImageChange: () => void
+  onError?: (message: string) => void
 } 
