@@ -44,6 +44,33 @@ async function uploadToImageHub(file: File | Blob, retryCount = 0): Promise<stri
     const formData = new FormData()
     formData.append('source', file)
 
+    console.log('准备上传图片到图床:', {
+      url: process.env.IMAGEHUB_API_URL,
+      method: 'POST',
+      file: {
+        type: file.type,
+        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        lastModified: file instanceof File ? new Date(file.lastModified).toISOString() : 'N/A',
+        name: file instanceof File ? file.name : 'blob'
+      },
+      retryCount
+    })
+
+    const requestHeaders = {
+      'X-API-Key': '***' + process.env.IMAGEHUB_API_KEY!.slice(-6)
+    }
+    console.log('请求头:', requestHeaders)
+
+    console.log('FormData 内容:')
+    for (const [key, value] of formData.entries()) {
+      console.log('- ', key, ':', {
+        type: value instanceof Blob ? value.type : typeof value,
+        size: value instanceof Blob ? `${(value.size / 1024 / 1024).toFixed(2)}MB` : 'N/A',
+        name: value instanceof File ? value.name : 'blob'
+      })
+    }
+
+    const startTime = Date.now()
     const response = await fetch(process.env.IMAGEHUB_API_URL!, {
       method: 'POST',
       headers: {
@@ -52,24 +79,94 @@ async function uploadToImageHub(file: File | Blob, retryCount = 0): Promise<stri
       body: formData
     })
 
+    const endTime = Date.now()
+
+    console.log('图床响应详情:', {
+      timing: {
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        duration: `${endTime - startTime}ms`
+      },
+      status: {
+        code: response.status,
+        text: response.statusText
+      },
+      headers: Object.fromEntries(response.headers.entries()),
+      type: response.type,
+      url: response.url,
+      redirected: response.redirected
+    })
+
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('图床上传失败:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: errorText,
+        timestamp: new Date().toISOString()
+      })
       throw new Error('图片上传失败')
     }
 
     const result = await response.json()
-    console.log('图床上传响应:', result)
+    console.log('图床上传成功:', {
+      timing: {
+        total: `${endTime - startTime}ms`,
+        timestamp: new Date().toISOString()
+      },
+      response: {
+        status_code: result.status_code,
+        status_txt: result.status_txt,
+        image: result.image
+      },
+      request: {
+        originalFile: {
+          type: file.type,
+          size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+          name: file instanceof File ? file.name : 'blob'
+        }
+      }
+    })
 
     if (result.status_code !== 200) {
+      console.error('图床返回错误:', {
+        result,
+        timestamp: new Date().toISOString(),
+        requestDetails: {
+          fileType: file.type,
+          fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`
+        }
+      })
       throw new Error(result.status_txt || '图片上传失败')
     }
 
     return result.image.url
   } catch (error) {
     if (retryCount < 2) {
-      console.log(`上传失败，尝试压缩后重新上传 (第${retryCount + 1}次)...`)
+      console.log(`上传失败，准备重试 (第${retryCount + 1}次):`, {
+        error: error instanceof Error ? error.message : String(error),
+        nextAction: '尝试压缩后重新上传',
+        timestamp: new Date().toISOString(),
+        fileInfo: {
+          type: file.type,
+          size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+          name: file instanceof File ? file.name : 'blob'
+        }
+      })
       const compressedFile = await compressImage(file instanceof File ? file : new File([file], 'image.jpg'))
       return uploadToImageHub(compressedFile, retryCount + 1)
     }
+    console.error('图片上传最终失败:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      retryCount,
+      timestamp: new Date().toISOString(),
+      fileDetails: {
+        type: file.type,
+        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        name: file instanceof File ? file.name : 'blob'
+      }
+    })
     throw error
   }
 }
