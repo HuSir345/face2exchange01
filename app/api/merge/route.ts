@@ -7,21 +7,12 @@ async function compressImage(file: File) {
     const buffer = await file.arrayBuffer()
     const fileBuffer = Buffer.from(buffer)
 
-    let sharpInstance;
     try {
       // 尝试动态导入 sharp
-      const sharpModule = await import('sharp');
-      sharpInstance = sharpModule.default;
+      const sharpModule = await import('@vercel/sharp');
       console.log('Sharp 模块加载成功');
-    } catch (error) {
-      console.error('Sharp 模块加载失败:', error);
-      // 如果无法加载 sharp，返回原图
-      return file;
-    }
 
-    try {
-      console.log('开始处理图片');
-      const compressedBuffer = await sharpInstance(fileBuffer)
+      const compressedBuffer = await sharpModule.default(fileBuffer)
         .resize(1920, 1920, {
           fit: 'inside',
           withoutEnlargement: true
@@ -34,8 +25,9 @@ async function compressImage(file: File) {
 
       console.log('图片压缩完成');
       return new File([compressedBuffer], file.name, { type: 'image/jpeg' });
-    } catch (processError) {
-      console.error('图片处理失败:', processError);
+    } catch (error) {
+      console.error('Sharp 处理失败:', error);
+      // 如果处理失败，返回原图
       return file;
     }
   } catch (error) {

@@ -2,18 +2,21 @@
   "version": 2,
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
-  "installCommand": "npm install && npm install --platform=linux --arch=x64 sharp",
+  "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
     "app/api/**/*": {
-      "memory": 1024,
-      "maxDuration": 60,
-      "runtime": "nodejs18.x"
+      "memory": 3008,
+      "maxDuration": 60
     }
   },
-  "env": {
-    "NEXT_TELEMETRY_DISABLED": "1",
-    "SHARP_IGNORE_GLOBAL_LIBVIPS": "1",
-    "SHARP_PATH": "/var/task/node_modules/sharp"
-  }
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "installCommand": "npm install --platform=linux --arch=x64 sharp"
+      }
+    }
+  ]
 } 
