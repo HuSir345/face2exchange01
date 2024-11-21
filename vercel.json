@@ -7,10 +7,12 @@
   "functions": {
     "app/api/**/*": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "runtime": "nodejs18.x"
     }
   },
   "env": {
-    "NEXT_TELEMETRY_DISABLED": "1"
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "SHARP_IGNORE_GLOBAL_LIBVIPS": "1"
   }
 } 

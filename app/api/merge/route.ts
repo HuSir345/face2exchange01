@@ -3,38 +3,34 @@ import sharp from 'sharp'
 
 async function compressImage(file: File) {
   try {
+    console.log('开始压缩图片...')
     const buffer = await file.arrayBuffer()
     const fileBuffer = Buffer.from(buffer)
 
-    const randomQuality = 0.59 + Math.random() * (0.99 - 0.59)
-    const finalQuality = Math.floor(80 * randomQuality)
+    // 动态导入 sharp
+    const sharp = (await import('sharp')).default
 
-    console.log('压缩质量系数:', randomQuality.toFixed(6))
-    console.log('最终压缩质量:', finalQuality)
-
+    console.log('Sharp 模块加载成功，开始处理图片')
     const compressedBuffer = await sharp(fileBuffer)
       .resize(1920, 1920, {
         fit: 'inside',
         withoutEnlargement: true
       })
       .jpeg({
-        quality: finalQuality,
+        quality: 80,
         progressive: true
       })
       .toBuffer()
+      .catch(error => {
+        console.error('Sharp 处理图片失败:', error)
+        throw error
+      })
 
-    const compressedFile = new File(
-      [compressedBuffer],
-      file.name,
-      { type: 'image/jpeg' }
-    )
-
-    console.log('压缩前大小:', (file.size / 1024 / 1024).toFixed(2) + 'MB')
-    console.log('压缩后大小:', (compressedFile.size / 1024 / 1024).toFixed(2) + 'MB')
-
-    return compressedFile
+    console.log('图片压缩完成')
+    return new File([compressedBuffer], file.name, { type: 'image/jpeg' })
   } catch (error) {
-    console.error('图片压缩失败:', error)
+    console.error('图片压缩过程出错:', error)
+    // 如果压缩失败，返回原图
     return file
   }
 }

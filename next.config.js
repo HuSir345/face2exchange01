@@ -4,6 +4,9 @@ const nextConfig = {
   images: {
     domains: ['s1.imagehub.cc', 's.coze.cn'],
     unoptimized: true
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['sharp']
   }
 }
 
