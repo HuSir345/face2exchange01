@@ -7,31 +7,41 @@ async function compressImage(file: File) {
     const buffer = await file.arrayBuffer()
     const fileBuffer = Buffer.from(buffer)
 
-    // 动态导入 sharp
-    const sharp = (await import('sharp')).default
+    let sharpInstance;
+    try {
+      // 尝试动态导入 sharp
+      const sharpModule = await import('sharp');
+      sharpInstance = sharpModule.default;
+      console.log('Sharp 模块加载成功');
+    } catch (error) {
+      console.error('Sharp 模块加载失败:', error);
+      // 如果无法加载 sharp，返回原图
+      return file;
+    }
 
-    console.log('Sharp 模块加载成功，开始处理图片')
-    const compressedBuffer = await sharp(fileBuffer)
-      .resize(1920, 1920, {
-        fit: 'inside',
-        withoutEnlargement: true
-      })
-      .jpeg({
-        quality: 80,
-        progressive: true
-      })
-      .toBuffer()
-      .catch(error => {
-        console.error('Sharp 处理图片失败:', error)
-        throw error
-      })
+    try {
+      console.log('开始处理图片');
+      const compressedBuffer = await sharpInstance(fileBuffer)
+        .resize(1920, 1920, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({
+          quality: 80,
+          progressive: true
+        })
+        .toBuffer();
 
-    console.log('图片压缩完成')
-    return new File([compressedBuffer], file.name, { type: 'image/jpeg' })
+      console.log('图片压缩完成');
+      return new File([compressedBuffer], file.name, { type: 'image/jpeg' });
+    } catch (processError) {
+      console.error('图片处理失败:', processError);
+      return file;
+    }
   } catch (error) {
-    console.error('图片压缩过程出错:', error)
+    console.error('图片压缩过程出错:', error);
     // 如果压缩失败，返回原图
-    return file
+    return file;
   }
 }
 

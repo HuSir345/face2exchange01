@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "installCommand": "npm install && npm install --platform=linux --arch=x64 sharp",
   "framework": "nextjs",
   "functions": {
     "app/api/**/*": {
@@ -13,6 +13,7 @@
   },
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1",
-    "SHARP_IGNORE_GLOBAL_LIBVIPS": "1"
+    "SHARP_IGNORE_GLOBAL_LIBVIPS": "1",
+    "SHARP_PATH": "/var/task/node_modules/sharp"
   }
 } 

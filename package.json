@@ -8,13 +8,14 @@
     "start": "next start",
     "vercel-dev": "vercel dev",
     "lint": "next lint",
-    "postinstall": "npm install --platform=linux --arch=x64 sharp"
+    "postinstall": "node node_modules/sharp/install/libvips && npm install --platform=linux --arch=x64 sharp"
   },
   "dependencies": {
     "formidable": "^3.5.1",
     "next": "13.5.6",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "sharp": "^0.33.0"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.8.1",
@@ -27,8 +28,5 @@
     "tailwindcss": "^3.3.5",
     "typescript": "^5.3.2",
     "vercel": "^32.5.6"
-  },
-  "optionalDependencies": {
-    "sharp": "latest"
   }
 }
