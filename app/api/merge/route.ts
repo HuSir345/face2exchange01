@@ -171,18 +171,92 @@ async function uploadToImageHub(file: File | Blob, retryCount = 0): Promise<stri
   }
 }
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  delay = 1000
+): Promise<Response> {
+  let lastError: Error = new Error('Unknown error')
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      if (response.ok) return response
+      
+      const errorText = await response.text()
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      console.log(`请求失败，第 ${attempt + 1} 次重试:`, {
+        error: lastError.message,
+        nextRetryIn: attempt < retries - 1 ? `${delay}ms` : 'no more retries',
+        url,
+        timestamp: new Date().toISOString()
+      })
+      
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay))
+        continue
+      }
+    }
+  }
+  
+  throw lastError
+}
+
 async function downloadAndUploadImage(url: string): Promise<string> {
   try {
     console.log('开始下载图片:', url)
-    const response = await fetch(url)
-    if (!response.ok) throw new Error('图片下载失败')
     
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
+    
+    const response = await fetchWithRetry(
+      url,
+      {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'image/*, */*',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive'
+        },
+        keepalive: true
+      },
+      3,  // 重试次数
+      1000 // 重试延迟
+    ).finally(() => clearTimeout(timeout))
+
+    if (!response.ok) {
+      console.error('图片下载失败:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+      throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+    }
+    
+    const contentType = response.headers.get('content-type')
+    if (!contentType?.startsWith('image/')) {
+      console.error('响应不是图片:', contentType)
+      throw new Error('下载的内容不是图片')
+    }
+
     const blob = await response.blob()
-    console.log('图片下载完成，开始上传到图床')
+    console.log('图片下载完成', {
+      size: `${(blob.size / 1024 / 1024).toFixed(2)}MB`,
+      type: blob.type
+    })
     
     return await uploadToImageHub(blob)
   } catch (error) {
-    console.error('下载并上传图片失败:', error)
+    console.error('下载并上传图片失败:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      url,
+      timestamp: new Date().toISOString()
+    })
     throw error
   }
 }
@@ -338,7 +412,13 @@ export async function POST(request: NextRequest) {
       )
 
     } catch (error) {
-      console.error('处理过程错误:', error)
+      console.error('处理过程错误:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? error.cause : undefined
+      })
+      
       return new NextResponse(
         JSON.stringify({
           error: error instanceof Error ? error.message : '处理失败',
